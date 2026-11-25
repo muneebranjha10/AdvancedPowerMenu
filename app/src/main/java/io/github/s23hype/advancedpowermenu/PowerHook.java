@@ -1,6 +1,7 @@
 package io.github.s23hype.advancedpowermenu;
 import android.app.AndroidAppHelper;
 import android.app.KeyguardManager;
+import android.app.ActivityOptions;
 import android.content.*;
 import android.os.Build;
 import android.os.SystemClock;
@@ -105,7 +106,9 @@ public final class PowerHook implements IXposedHookLoadPackage {
            if(now-armed[0]>60000){armed[0]=0;return null;}
            fired[0]=true;armed[0]=0;
            dismiss.invoke(owner,false);
-           c.startActivity(new Intent(launch));
+           ActivityOptions opts=ActivityOptions.makeBasic().setShareIdentityEnabled(true);
+           c.startActivity(new Intent(launch),opts.toBundle());
+           XposedBridge.log(TAG+": native restart handoff launched with caller identity");
           }else{
            armed[0]=now;
            confirm.invoke(owner,self);

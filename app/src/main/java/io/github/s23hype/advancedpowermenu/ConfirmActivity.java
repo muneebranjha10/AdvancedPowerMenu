@@ -16,7 +16,7 @@ public class ConfirmActivity extends Activity {
  @Override public void onCreate(Bundle b){super.onCreate(b);
   if(!unlocked()){finish();return;}
   if(nativeConfirmed()){
-   if(b!=null||!authorizedNativeCaller()){finish();return;}
+   if(b!=null||!authorizedNativeCaller()){android.util.Log.w("AdvancedPowerMenu","Native handoff rejected");finish();return;}
    return;
   }
   dialog=new AlertDialog.Builder(this).setTitle("Soft restart?").setMessage("Android will restart its userspace and close running apps. Save your work first. Do not continue if KernelSU or your device is unstable.").setNegativeButton("Cancel",(d,w)->finish()).setPositiveButton("Soft restart",null).create();
@@ -32,7 +32,7 @@ public class ConfirmActivity extends Activity {
  }
  private void request(){
   if(!resumed||nativeInterrupted||!unlocked()||!BUSY.compareAndSet(false,true)){if(nativeConfirmed())finish();return;}
-  long now=SystemClock.elapsedRealtime(); long last=getPreferences(0).getLong("last_attempt",-1);
+  long now=SystemClock.elapsedRealtime(); long last=getSharedPreferences("restart_limits",MODE_PRIVATE).getLong("last_attempt",-1);
   if(last>=0&&now>=last&&now-last<30000){BUSY.set(false);Toast.makeText(this,"Please wait before retrying",Toast.LENGTH_SHORT).show();if(nativeConfirmed())finish();return;}
   if(dialog!=null)dialog.getButton(-1).setEnabled(false);
   new Thread(()->{
@@ -40,11 +40,12 @@ public class ConfirmActivity extends Activity {
    try{
     int pre=shell("test \"$(id -u)\" = 0 && test -x /data/adb/ksud && /data/adb/ksud --help | grep -q soft-reboot",20);
     if(pre==0&&resumed&&!nativeInterrupted&&unlocked()&&!isFinishing()&&!isDestroyed()){
-     if(!getPreferences(0).edit().putLong("last_attempt",SystemClock.elapsedRealtime()).commit()) throw new IllegalStateException("Cannot save rate limit");
+     if(!getSharedPreferences("restart_limits",MODE_PRIVATE).edit().putLong("last_attempt",SystemClock.elapsedRealtime()).commit()) throw new IllegalStateException("Cannot save rate limit");
+     android.util.Log.i("AdvancedPowerMenu","Root preflight passed; requesting soft reboot");
      int code=shell("test \"$(id -u)\" = 0 && exec /data/adb/ksud soft-reboot",15);
      result=code==0?"Restart requested.": "Restart command did not report success. Do not retry automatically.";
     }else if(pre==0){result="Confirmation interrupted. Unlock and reopen to try again.";}
-   }catch(Exception ignored){} finally{BUSY.set(false);}
+   }catch(Exception e){android.util.Log.w("AdvancedPowerMenu","Restart request failed",e);} finally{BUSY.set(false);}
    final String msg=result;
    runOnUiThread(()->{if(!isFinishing()&&!isDestroyed()){Toast.makeText(this,msg,Toast.LENGTH_LONG).show();finish();}});
   },"apm-restart").start();
