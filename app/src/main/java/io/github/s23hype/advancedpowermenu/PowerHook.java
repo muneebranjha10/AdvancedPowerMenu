@@ -14,14 +14,15 @@ public final class PowerHook implements IXposedHookLoadPackage {
  private static final Set<String> KNOWN=Set.of("getActionInfo","setActionInfo","onPress","onPressSecureConfirm","onLongPress","getState","setState","getIcon","setIcon","getText","setText","setIntent","setIntentAction","showBeforeProvisioning","isAvailableShow","updateState","showTipPopup","dismissTipPopup");
  private static boolean unlocked(Context c){KeyguardManager k=c.getSystemService(KeyguardManager.class);return k!=null&&!k.isDeviceLocked()&&!k.isKeyguardLocked();}
  @Override public void handleLoadPackage(XC_LoadPackage.LoadPackageParam p){
-  if(!"com.android.systemui".equals(p.packageName)||!p.packageName.equals(p.processName)||!"samsung".equalsIgnoreCase(Build.MANUFACTURER)||Build.VERSION.SDK_INT<36||Build.VERSION.SDK_INT>37)return;
+  if(!"com.android.systemui".equals(p.packageName)||!p.packageName.equals(p.processName)||!"samsung".equalsIgnoreCase(Build.MANUFACTURER))return;
+  if(Build.VERSION.SDK_INT<36||Build.VERSION.SDK_INT>37){XposedBridge.log(TAG+": unsupported SDK "+Build.VERSION.SDK_INT);return;}
   try {
    ClassLoader cl=p.classLoader;
    Class<?> presenter=Class.forName(NS+"presentation.SamsungGlobalActionsPresenter",false,cl);
    Class<?> model=Class.forName(NS+"presentation.viewmodel.ActionViewModel",false,cl);
    Class<?> info=Class.forName(NS+"presentation.viewmodel.ActionInfo",false,cl);
-   if(!model.isInterface())return;
-   for(Method m:model.getMethods())if(!KNOWN.contains(m.getName()))return;
+   if(!model.isInterface()){XposedBridge.log(TAG+": action model is not an interface");return;}
+   for(Method m:model.getMethods())if(!KNOWN.contains(m.getName())){XposedBridge.log(TAG+": unsupported interface method "+m.getName());return;}
    Method valid=presenter.getMethod("getValidActions");
    if(!List.class.isAssignableFrom(valid.getReturnType()))return;
    Method getInfo=model.getMethod("getActionInfo"), getName=info.getMethod("getName"), getIcon=info.getMethod("getIcon"), getType=info.getMethod("getViewType"), getState=model.getMethod("getState");
@@ -33,14 +34,15 @@ public final class PowerHook implements IXposedHookLoadPackage {
     @Override protected void afterHookedMethod(MethodHookParam h){
      if(failed||h.hasThrowable()||!(h.getResult() instanceof List<?>))return;
      try{
-      Context c=AndroidAppHelper.currentApplication(); if(c==null||!unlocked(c))return;
+      Context c=AndroidAppHelper.currentApplication(); if(c==null||!unlocked(c)){XposedBridge.log(TAG+": no unlocked SystemUI context");return;}
       Intent launch=new Intent().setClassName(PKG,PKG+".ConfirmActivity").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-      if(launch.resolveActivity(c.getPackageManager())==null)return;
-      List<?> nativeList=(List<?>)h.getResult(); if(nativeList.size()<2||nativeList.size()>4)return;
-      Object restart=null, original=null;
-      for(Object action:nativeList){if(!model.isInstance(action))return; Object ai=getInfo.invoke(action); if(ai==null)return; String name=(String)getName.invoke(ai);if("apm_soft_restart".equals(name))return;if("restart".equals(name)){restart=action;original=ai;}}
-      if(restart==null||original==null)return;
-      Object viewType=getType.invoke(original); int icon=(Integer)getIcon.invoke(original); if(viewType==null||icon<=0)return;
+      // Explicit component; package visibility can hide it from resolveActivity.
+      List<?> nativeList=(List<?>)h.getResult(); if(nativeList.size()<2||nativeList.size()>16){XposedBridge.log(TAG+": unsupported action count "+nativeList.size());return;}
+      Object restart=null, original=null; StringBuilder names=new StringBuilder();
+      for(Object action:nativeList){if(!model.isInstance(action))return; Object ai=getInfo.invoke(action); if(ai==null)return; String name=(String)getName.invoke(ai);names.append(name).append(" ");if("apm_soft_restart".equals(name))return;if("restart".equals(name)){restart=action;original=ai;}}
+      if(restart==null||original==null){XposedBridge.log(TAG+": no restart in "+names);return;}
+      Object viewType=getType.invoke(original); int icon=(Integer)getIcon.invoke(original); if(viewType==null||icon<=0){XposedBridge.log(TAG+": restart missing native view type/icon");return;}
+      int central=0; for(Object a:nativeList){Object ai=getInfo.invoke(a); if(viewType.equals(getType.invoke(ai)))central++;} if(central<1||central>6){XposedBridge.log(TAG+": unsupported central action count "+central);return;}
       Object state=getState.invoke(restart), custom=info.getConstructor().newInstance();
       setName.invoke(custom,"apm_soft_restart");setLabel.invoke(custom,"Soft restart");setDesc.invoke(custom,"Restart Android userspace");setStateLabel.invoke(custom,"");setIcon.invoke(custom,icon);setType.invoke(custom,viewType);
       Object proxy=Proxy.newProxyInstance(model.getClassLoader(),new Class<?>[]{model},(self,m,args)->{
@@ -58,10 +60,11 @@ public final class PowerHook implements IXposedHookLoadPackage {
         default:return null;
        }
       });
-      ArrayList<Object> copy=new ArrayList<>(nativeList); copy.add(proxy); h.setResult(copy);
-     }catch(Throwable e){failed=true;Log.w(TAG,"Power hook disabled for this process",e);}
+      ArrayList<Object> copy=new ArrayList<>(nativeList); copy.add(proxy); h.setResult(copy); XposedBridge.log(TAG+": added Soft restart to "+names);
+     }catch(Throwable e){failed=true;Log.w(TAG,"Power hook disabled for this process",e);XposedBridge.log(e);}
     }
    });
-  }catch(Throwable e){Log.w(TAG,"Unsupported power menu; left unchanged",e);}
+   XposedBridge.log(TAG+": installed power menu hook; SDK "+Build.VERSION.SDK_INT);
+  }catch(Throwable e){Log.w(TAG,"Unsupported power menu; left unchanged",e);XposedBridge.log(e);}
  }
 }
