@@ -9,3 +9,6 @@ Samsung Quick Panel tile and optional LSPosed power-menu entry. No kernel, boot 
 5. Android 16/17 Samsung firmware is the intended target; power menu layout and actual reboot behavior have NOT been validated on a physical phone. No promise of bootloop-free operation. No automatic commands or retries. The custom power-menu action uses the native restart icon and renderer, and is omitted if the expected interfaces are not present.
 
 Source inspection: supplied SystemUI references SamsungGlobalActionsPresenter.getValidActions(), and the supplied framework defines that method, ActionViewModel and ActionInfo. The supplied KernelSU APK contains soft-reboot. Neither OEM nor KernelSU binaries are redistributed.
+
+## 0.2 native confirmation
+The power-menu entry uses Samsung presenter confirmAction and requires the same selected proxy on a distinct second tap. A permission-protected SystemUI handoff runs the existing root preflight; it rejects other callers and interrupted launches. The blue power icon is applied only to the custom entry. The Quick Panel retains its independent dialog. Grant root to the app first via KernelSU; a first-time authorization prompt may interrupt the native handoff. Native confirmation/animation and permissions require real device testing.
