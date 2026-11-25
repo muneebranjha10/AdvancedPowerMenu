@@ -1,0 +1,67 @@
+package io.github.s23hype.advancedpowermenu;
+import android.app.AndroidAppHelper;
+import android.app.KeyguardManager;
+import android.content.*;
+import android.os.Build;
+import android.util.Log;
+import java.lang.reflect.*;
+import java.util.*;
+import de.robv.android.xposed.*;
+import de.robv.android.xposed.callbacks.XC_LoadPackage;
+public final class PowerHook implements IXposedHookLoadPackage {
+ private static final String PKG="io.github.s23hype.advancedpowermenu", NS="com.samsung.android.globalactions.";
+ private static final String TAG="AdvancedPowerMenu";
+ private static final Set<String> KNOWN=Set.of("getActionInfo","setActionInfo","onPress","onPressSecureConfirm","onLongPress","getState","setState","getIcon","setIcon","getText","setText","setIntent","setIntentAction","showBeforeProvisioning","isAvailableShow","updateState","showTipPopup","dismissTipPopup");
+ private static boolean unlocked(Context c){KeyguardManager k=c.getSystemService(KeyguardManager.class);return k!=null&&!k.isDeviceLocked()&&!k.isKeyguardLocked();}
+ @Override public void handleLoadPackage(XC_LoadPackage.LoadPackageParam p){
+  if(!"com.android.systemui".equals(p.packageName)||!p.packageName.equals(p.processName)||!"samsung".equalsIgnoreCase(Build.MANUFACTURER)||Build.VERSION.SDK_INT<36||Build.VERSION.SDK_INT>37)return;
+  try {
+   ClassLoader cl=p.classLoader;
+   Class<?> presenter=Class.forName(NS+"presentation.SamsungGlobalActionsPresenter",false,cl);
+   Class<?> model=Class.forName(NS+"presentation.viewmodel.ActionViewModel",false,cl);
+   Class<?> info=Class.forName(NS+"presentation.viewmodel.ActionInfo",false,cl);
+   if(!model.isInterface())return;
+   for(Method m:model.getMethods())if(!KNOWN.contains(m.getName()))return;
+   Method valid=presenter.getMethod("getValidActions");
+   if(!List.class.isAssignableFrom(valid.getReturnType()))return;
+   Method getInfo=model.getMethod("getActionInfo"), getName=info.getMethod("getName"), getIcon=info.getMethod("getIcon"), getType=info.getMethod("getViewType"), getState=model.getMethod("getState");
+   Method setName=info.getMethod("setName",String.class),setLabel=info.getMethod("setLabel",String.class),setIcon=info.getMethod("setIcon",int.class),setType=info.getMethod("setViewType",getType.getReturnType());
+   Method setDesc=info.getMethod("setDescription",String.class),setStateLabel=info.getMethod("setStateLabel",String.class);
+   Method dismiss=presenter.getMethod("dismissDialog",boolean.class);
+   XposedBridge.hookMethod(valid,new XC_MethodHook(){
+    private boolean failed;
+    @Override protected void afterHookedMethod(MethodHookParam h){
+     if(failed||h.hasThrowable()||!(h.getResult() instanceof List<?>))return;
+     try{
+      Context c=AndroidAppHelper.currentApplication(); if(c==null||!unlocked(c))return;
+      Intent launch=new Intent().setClassName(PKG,PKG+".ConfirmActivity").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+      if(launch.resolveActivity(c.getPackageManager())==null)return;
+      List<?> nativeList=(List<?>)h.getResult(); if(nativeList.size()<2||nativeList.size()>4)return;
+      Object restart=null, original=null;
+      for(Object action:nativeList){if(!model.isInstance(action))return; Object ai=getInfo.invoke(action); if(ai==null)return; String name=(String)getName.invoke(ai);if("apm_soft_restart".equals(name))return;if("restart".equals(name)){restart=action;original=ai;}}
+      if(restart==null||original==null)return;
+      Object viewType=getType.invoke(original); int icon=(Integer)getIcon.invoke(original); if(viewType==null||icon<=0)return;
+      Object state=getState.invoke(restart), custom=info.getConstructor().newInstance();
+      setName.invoke(custom,"apm_soft_restart");setLabel.invoke(custom,"Soft restart");setDesc.invoke(custom,"Restart Android userspace");setStateLabel.invoke(custom,"");setIcon.invoke(custom,icon);setType.invoke(custom,viewType);
+      Object proxy=Proxy.newProxyInstance(model.getClassLoader(),new Class<?>[]{model},(self,m,args)->{
+       switch(m.getName()){
+        case "getActionInfo":return custom;
+        case "getState":return state;
+        case "isAvailableShow":return true;
+        case "showBeforeProvisioning":return false;
+        case "hashCode":return System.identityHashCode(self);
+        case "equals":return args!=null&&args.length==1&&self==args[0];
+        case "toString":return "AdvancedPowerMenu";
+        case "onPress":
+         try{if(unlocked(c)){dismiss.invoke(h.thisObject,false);c.startActivity(new Intent(launch));}}catch(Throwable e){Log.w(TAG,"Action skipped",e);}return null;
+        case "onPressSecureConfirm":case "onLongPress":return null;
+        default:return null;
+       }
+      });
+      ArrayList<Object> copy=new ArrayList<>(nativeList); copy.add(proxy); h.setResult(copy);
+     }catch(Throwable e){failed=true;Log.w(TAG,"Power hook disabled for this process",e);}
+    }
+   });
+  }catch(Throwable e){Log.w(TAG,"Unsupported power menu; left unchanged",e);}
+ }
+}
