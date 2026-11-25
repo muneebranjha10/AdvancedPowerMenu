@@ -1,0 +1,31 @@
+name: Publish Soft Restart v0.3.1
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/publish-v031.yml']
+  workflow_dispatch:
+permissions:
+  contents: write
+  actions: read
+jobs:
+  publish:
+    runs-on: ubuntu-24.04
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+    steps:
+      - name: Retrieve verified build and publish
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(gh run view 45686581502 --json conclusion --jq .conclusion)" = success
+          test "$(gh run view 45686581502 --json headSha --jq .headSha)" = f415d750cc73d9b054cf9fa50e0ee0c0a6d8eca6
+          gh run download 45686581502 --name AdvancedPowerMenu-experimental --dir dist
+          test -s dist/app-debug.apk
+          mv dist/app-debug.apk dist/SoftRestart-v0.3.1.apk
+          sha256sum dist/SoftRestart-v0.3.1.apk
+          if gh release view v0.3.1 >/dev/null 2>&1; then
+            echo "Release already exists; refusing to overwrite."
+            exit 1
+          fi
+          gh release create v0.3.1 dist/SoftRestart-v0.3.1.apk --target f415d750cc73d9b054cf9fa50e0ee0c0a6d8eca6 --title "Soft Restart v0.3.1" --notes "First public release by @s23_hype. Native Samsung power menu soft restart with two-tap confirmation, Quick Panel tile, custom circular icon and setup guide. Requires working KernelSU root; LSPosed with System UI scope for the power menu. Target: One UI 8 and 9. Power menu restart reported working by the developer; other firmware configurations are not independently verified. Save your work first. No guarantee against bootloops; use only on stable rooted devices."
