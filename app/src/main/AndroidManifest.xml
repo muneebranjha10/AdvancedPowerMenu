@@ -7,7 +7,7 @@
         <activity android:name=".MainActivity" android:exported="true">
             <intent-filter><action android:name="android.intent.action.MAIN"/><category android:name="android.intent.category.LAUNCHER"/></intent-filter>
         </activity>
-        <activity android:name=".ConfirmActivity" android:exported="true" android:excludeFromRecents="true" android:theme="@android:style/Theme.DeviceDefault.DayNight.Dialog.Alert"/>
+        <activity android:name=".ConfirmActivity" android:exported="true" android:excludeFromRecents="true" android:theme="@android:style/Theme.DeviceDefault.DayNight"/>
         <service android:name=".RestartTile" android:exported="true" android:permission="android.permission.BIND_QUICK_SETTINGS_TILE" android:label="Soft restart" android:icon="@drawable/ic_restart">
             <intent-filter><action android:name="android.service.quicksettings.action.QS_TILE"/></intent-filter>
         </service>
