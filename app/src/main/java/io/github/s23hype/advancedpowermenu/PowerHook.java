@@ -60,10 +60,10 @@ public final class PowerHook implements IXposedHookLoadPackage {
        ImageView image=(ImageView)target;
        Drawable originalIcon=image.getDrawable();
        int w=originalIcon!=null?originalIcon.getIntrinsicWidth():-1;
-       int h=originalIcon!=null?originalIcon.getIntrinsicHeight():-1;
+       int ih=originalIcon!=null?originalIcon.getIntrinsicHeight():-1;
        int fallback=Math.round(56*root.getResources().getDisplayMetrics().density);
        image.setScaleType(ImageView.ScaleType.FIT_CENTER);
-       image.setImageDrawable(new SoftIcon(w>0?w:fallback,h>0?h:fallback));
+       image.setImageDrawable(new SoftIcon(w>0?w:fallback,ih>0?ih:fallback));
       }
      }catch(Throwable e){XposedBridge.log(TAG+": icon unchanged: "+e);}
     }
