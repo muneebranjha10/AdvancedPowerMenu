@@ -12,3 +12,6 @@ Source inspection: supplied SystemUI references SamsungGlobalActionsPresenter.ge
 
 ## 0.2 native confirmation
 The power-menu entry uses Samsung presenter confirmAction and requires the same selected proxy on a distinct second tap. A permission-protected SystemUI handoff runs the existing root preflight; it rejects other callers and interrupted launches. The blue power icon is applied only to the custom entry. The Quick Panel retains its independent dialog. Grant root to the app first via KernelSU; a first-time authorization prompt may interrupt the native handoff. Native confirmation/animation and permissions require real device testing.
+
+## 0.3 Soft Restart
+Display name updated; package ID unchanged. A density-independent circular icon replaces the previous bitmap to avoid cropped artwork. Welcome screen and setup guide credit [s23_hype](https://t.me/s23_hype). The root check does not execute a restart. Existing two-tap confirmation and restart path are unchanged. Test on supported devices before public release.

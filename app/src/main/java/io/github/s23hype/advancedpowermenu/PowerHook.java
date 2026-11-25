@@ -5,7 +5,7 @@ import android.content.*;
 import android.os.Build;
 import android.os.SystemClock;
 import android.graphics.*;
-import android.graphics.drawable.BitmapDrawable;
+import android.graphics.drawable.Drawable;
 import android.view.View;
 import android.widget.ImageView;
 import android.content.pm.PackageManager;
@@ -56,7 +56,15 @@ public final class PowerHook implements IXposedHookLoadPackage {
       Object ai=getInfo.invoke(action);if(ai==null||!"apm_soft_restart".equals(getName.invoke(ai)))return;
       View root=(View)h.args[0]; int id=(Integer)resourceGet.invoke(rf.get(h.thisObject),iconType);
       View target=root.findViewById(id);
-      if(target instanceof ImageView) ((ImageView)target).setImageDrawable(makeIcon(root.getContext()));
+      if(target instanceof ImageView){
+       ImageView image=(ImageView)target;
+       Drawable originalIcon=image.getDrawable();
+       int w=originalIcon!=null?originalIcon.getIntrinsicWidth():-1;
+       int h=originalIcon!=null?originalIcon.getIntrinsicHeight():-1;
+       int fallback=Math.round(56*root.getResources().getDisplayMetrics().density);
+       image.setScaleType(ImageView.ScaleType.FIT_CENTER);
+       image.setImageDrawable(new SoftIcon(w>0?w:fallback,h>0?h:fallback));
+      }
      }catch(Throwable e){XposedBridge.log(TAG+": icon unchanged: "+e);}
     }
    });
@@ -114,15 +122,5 @@ public final class PowerHook implements IXposedHookLoadPackage {
    });
    XposedBridge.log(TAG+": installed power menu hook; SDK "+Build.VERSION.SDK_INT);
   }catch(Throwable e){Log.w(TAG,"Unsupported power menu; left unchanged",e);XposedBridge.log(e);}
- }
- private static BitmapDrawable makeIcon(Context c){
-  Bitmap b=Bitmap.createBitmap(192,192,Bitmap.Config.ARGB_8888); b.setDensity(android.util.DisplayMetrics.DENSITY_DEFAULT);
-  Canvas canvas=new Canvas(b);Paint p=new Paint(Paint.ANTI_ALIAS_FLAG);
-  p.setColor(0xff2479e8);canvas.drawCircle(96,96,95,p);
-  p.setColor(android.graphics.Color.WHITE);p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(10);p.setStrokeCap(Paint.Cap.ROUND);p.setStrokeJoin(Paint.Join.ROUND);
-  canvas.drawArc(44,44,148,148,-85,285,false,p);
-  Path arrow=new Path();arrow.moveTo(45,87);arrow.lineTo(45,114);arrow.lineTo(71,107);canvas.drawPath(arrow,p);
-  p.setStyle(Paint.Style.FILL);Path bolt=new Path();bolt.moveTo(100,58);bolt.lineTo(79,101);bolt.lineTo(97,101);bolt.lineTo(91,134);bolt.lineTo(119,89);bolt.lineTo(100,89);bolt.close();canvas.drawPath(bolt,p);
-  return new BitmapDrawable(c.getResources(),b);
  }
 }
